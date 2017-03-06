@@ -1,9 +1,16 @@
-import demjson
-from flask import Flask, request
 import logging
 from logging.handlers import RotatingFileHandler
+import json
 
+from elasticsearch import Elasticsearch
+import demjson
+from flask import Flask, request
+
+# Init flask app
 app = Flask(__name__)
+
+# Init elasticsearch
+es = Elasticsearch()
 
 # Configuration
 LOG_FILE = 'hermod.log'
@@ -95,12 +102,21 @@ def analyze():
 
         es_document = demjson.encode(document)
         app.logger.info('GET /api/action/analyze/ Crafted JSON: {}'.format(es_document))
-        response = demjson.encode({ 'status' : 'requested' })
-        code = 202
+
+        try:
+            es_response = es.index(index="fsoapi", doc_type="request", body=es_document)
+            app.logger.info('GET /api/action/analyze/ Response JSON: {}'.format(es_response))
+        except Exception as e:
+            app.logger.error('Exception saving es document: {}'.format(e))
+
+        if es_response['created']:
+            response = demjson.encode({ 'status' : 'requested', 'id' : es_response['_id'] })
+            code = 202
 
     if request.method == "POST":
         received = request.get_json()
 
+        # TODO create JSON document for es
         if received['tool'] == 'volatility':
             output = "volatility"
 
@@ -108,6 +124,15 @@ def analyze():
         code = 202
 
     return response, code
+
+
+@app.route("/api/action/analyze/<request_id>", methods=['GET'])
+def getRequest(request_id):
+
+    es_response = es.get(index="fsoapi", doc_type="request", id=request_id)
+
+    return "<pre>" + str(es_response['_source']) + "</pre>"
+
 
 if __name__ == "__main__":
 
