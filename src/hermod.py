@@ -1,146 +1,94 @@
+#!/usr/bin/env python
+"""
+**Module**: Hermod
+    :platform: Linux
+    :synopsis: Listens and handles FSO HTTP API requests
+.. moduleauthor:: Richard Ignacio <richard.ignacio@mandiant.com>
+"""
+
 import logging
 from logging.handlers import RotatingFileHandler
-import json
+import re
 
-from elasticsearch import Elasticsearch
 import demjson
+from elasticsearch import Elasticsearch
 from flask import Flask, request
+
+__author__ = "Richard Ignacio"
+__copyright__ = "Copyright 2007, FireEye Inc."
+__version__ = "0.1.1"
+__maintainer__ = "Richard Ignacio"
+__email__ = "richard.ignacio@mandiant.com"
+__status__ = "Development"
 
 # Init flask app
 app = Flask(__name__)
 
-# Init elasticsearch
-es = Elasticsearch()
-
-# Configuration
+# Log file configuration
 LOG_FILE = 'hermod.log'
 
-@app.route("/")
-def root():
-    return ""
+# Elasticsearch configuration
+ES_INDEX = 'fsoapi'
+ES_TYPE = 'request'
 
+IPADDRESS='localhost'
+PORT='5050'
 
-@app.route("/api/")
-def api():
-    return ""
-
-
-@app.route("/api/action/analyze/", methods=['GET','POST'])
-def analyze():
-    """Accept requests for executing forensics tools then post requests to elasticsearch
-
-        This endpoint accepts either GET or POST.
-
-        The following are the allowable parameters in the query string (GET) or keys in the JSON object (POST):
-            - host : Name or IP of host that contains the tool and artifacts
-            - username : SSH username to access host
-            - password : Password for username
-            - tool : Must be "volatility" or "log2timeline"
-            - profile: Platform to base analysis on (e.g. winxp)
-            - module : Volatility module to use (N/A to log2timeline)
-            - artifact_full_path : Full path on host, including file name to memory image (volatility) or
-                                   artifacts directory (log2timeline)
-            - output_full_path : Full path, including file name, to save output
-
-        Returns a 202 (Accepted) HTTP response code if successful
-
-        Example requests:
-
-        GET:
-        http://127.0.0.1:5000/api/action/analyze/?host=sift.test.com&artifact_full_path=/cases/win7.vmsn&
-        username=alice&password=Eve123-$&output_full_path=/cases/timeliner.txt&tool=volatility&
-        module=timeliner&profile=Win7SP1x64
-
-        POST:
-        http://127.0.0.1:5000/api/action/analyze/
-        (Body)
-        {
-            "host" : "sift.test.com",
-            "username" : "alice",
-            "password" : "Eve123-$",
-            "tool" : "volatility",
-            "module" : "timeliner",
-            "artifact_full_path" : "/cases/win7.vmsn",
-            "output_full_path" : "/cases/timeliner.txt"
-        }
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def catch_all(path):
+    """Intercept all URIs and handle both new requests and status requests
+    
+    Any URI with an ID at the end requests status for that document from ES. 
+    e.g. http://host:5000/a/c/d/e/qUdHfI0NQ8K4TZRIjoxhVw
+    
+    Any URL with a query string is considered a new request and will be stored
+    e.g. http://host:5000/g/h?key1=value1&key2=value2&key3=value3
     """
 
-    response = ""
-    code = None
+    id = None
+    doc = {}
+    response = ''
 
-    if request.method == 'GET':
-        command = ""
-        if request.args.get("tool") == "volatility":
-            command = "/usr/bin/vol.py -f {} {} --profile={} --output-file={}".format(
-                request.args.get("artifact_full_path"),
-                request.args.get("module"),
-                request.args.get("profile"),
-                request.args.get("output_full_path"))
+    # Look for Id
+    s = re.search('/([a-zA-Z\-0-9_\.]+)$', request.path)
 
-        if request.args.get("tool") == "log2timeline":
-            command = "/usr/bin/log2timeline -z local -f {} -r -p {} > {}".format(
-                request.args.get("profile"),
-                request.args.get("artifact_full_path"),
-                request.args.get("output_full_path")
-            )
+    if s and not request.args:
+        id = s.group(1)
 
-        document = {
-            'endpoint' : '/api/action/analyze/',
-            'request' : {
-                'host' : str(request.args.get("host")),
-                'username' : str(request.args.get("username")),
-                'password' : str(request.args.get("password")),
-                'tool' : str(request.args.get("tool")),
-                'module' : str(request.args.get("module")),
-                'profile': str(request.args.get("profile")),
-                'artifact_full_path' : str(request.args.get("artifact_full_path")),
-                'output_full_path' : str(request.args.get("output_full_path")),
-                'command' : str(command)
-            },
-            'status' : 'requested'
-        }
+    # Get status of existing request
+    if id:
+        try:
+            es_response = es.get(index=ES_INDEX, doc_type=ES_TYPE, id=id)
+        except Exception as e:
+            app.logger.error("Error getting elastic search document: {}".format(e))
 
-        es_document = demjson.encode(document)
-        app.logger.info('GET /api/action/analyze/ Crafted JSON: {}'.format(es_document))
+        response = demjson.encode(es_response)
+
+    # Create a new document
+    else:
+        doc[u'uri'] = request.path
+        doc[u'request'] = {}
+
+        if request.args:
+            for key in request.args:
+                value = request.args.get(key)
+                doc[u'request'][key] = value
 
         try:
-            es_response = es.index(index="fsoapi", doc_type="request", body=es_document)
-            app.logger.info('GET /api/action/analyze/ Response JSON: {}'.format(es_response))
+            es_response = es.index(index=ES_INDEX, doc_type=ES_TYPE, body=demjson.encode(doc))
         except Exception as e:
-            app.logger.error('Exception saving es document: {}'.format(e))
+            app.logger.error("Error saving elastic search document: {}".format(e))
 
-        if es_response['created']:
-            response = demjson.encode({ 'status' : 'requested', 'id' : es_response['_id'] })
-            code = 202
+        response = str(es_response)
 
-    if request.method == "POST":
-        received = request.get_json()
-
-        # TODO create JSON document for es
-        if received['tool'] == 'volatility':
-            output = "volatility"
-
-        response = "<pre>" + output + "</pre>"
-        code = 202
-
-    return response, code
-
-
-@app.route("/api/action/analyze/<request_id>", methods=['GET'])
-def getRequest(request_id):
-
-    es_response = es.get(index="fsoapi", doc_type="request", id=request_id)
-
-    return "<pre>" + str(es_response['_source']) + "</pre>"
+    return response
 
 
 if __name__ == "__main__":
 
-    # For access.log
-    # logger = logging.getLogger('werkzeug')
-    # handler = logging.FileHandler('access.log')
-    # logger.addHandler(handler)
-    # initialize the hermod log handler
+    # Init elasticsearch
+    es = Elasticsearch()
 
     logHandler = RotatingFileHandler('hermod.log', maxBytes=10000, backupCount=1)
     fmt = logging.Formatter('%(asctime)s [%(name)s] [%(levelname)s] : %(message)s')
@@ -153,4 +101,4 @@ if __name__ == "__main__":
     app.logger.setLevel(logging.INFO)
 
     app.logger.addHandler(logHandler)
-app.run()
+app.run(host=IPADDRESS, port=PORT)
