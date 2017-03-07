@@ -8,11 +8,12 @@
 
 import logging
 from logging.handlers import RotatingFileHandler
+import os
 import re
 
 import demjson
 from elasticsearch import Elasticsearch
-from flask import Flask, request
+from flask import Flask, request, send_from_directory
 
 __author__ = "Richard Ignacio"
 __copyright__ = "Copyright 2007, FireEye Inc."
@@ -33,6 +34,12 @@ ES_TYPE = 'request'
 
 IPADDRESS='localhost'
 PORT='5050'
+
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, '.'),
+                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
+
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -60,10 +67,9 @@ def catch_all(path):
     if id:
         try:
             es_response = es.get(index=ES_INDEX, doc_type=ES_TYPE, id=id)
+            response = demjson.encode(es_response)
         except Exception as e:
             app.logger.error("Error getting elastic search document: {}".format(e))
-
-        response = demjson.encode(es_response)
 
     # Create a new document
     else:
@@ -75,12 +81,12 @@ def catch_all(path):
                 value = request.args.get(key)
                 doc[u'request'][key] = value
 
-        try:
-            es_response = es.index(index=ES_INDEX, doc_type=ES_TYPE, body=demjson.encode(doc))
-        except Exception as e:
-            app.logger.error("Error saving elastic search document: {}".format(e))
+            try:
+                es_response = es.index(index=ES_INDEX, doc_type=ES_TYPE, body=demjson.encode(doc))
+            except Exception as e:
+                app.logger.error("Error saving elastic search document: {}".format(e))
 
-        response = str(es_response)
+            response = str(es_response)
 
     return response
 
