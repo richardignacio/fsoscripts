@@ -93,7 +93,7 @@ def catch_all(path):
             except Exception as e:
                 app.logger.error("Error saving elastic search document: {}".format(e))
 
-            response = str(es_response)
+            response = str(demjson.encode(es_response))
 
     return response
 
