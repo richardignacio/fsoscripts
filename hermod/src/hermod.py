@@ -37,6 +37,7 @@ PORT='5050'
 
 @app.route('/favicon.ico')
 def favicon():
+    """Respond to favicon requests by sending the FireEye icon"""
     return send_from_directory(os.path.join(app.root_path, '.'),
                                'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
