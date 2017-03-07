@@ -114,4 +114,6 @@ if __name__ == "__main__":
     app.logger.setLevel(logging.INFO)
 
     app.logger.addHandler(logHandler)
+    app.logger.info("===== Log start of hermod.py version: {} =====".format(__version__))
+
 app.run(host=IPADDRESS, port=PORT)
