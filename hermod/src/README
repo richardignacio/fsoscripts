@@ -8,7 +8,7 @@ PREREQUISITES
     - requires python demjson module
 
 CONFIGURATION
-Edit hermod.py and change IPADDRESS and PORT to match your
+*Edit* hermod.py and change IPADDRESS and PORT to match your
 server requirements.
 
 RUNNING
@@ -17,3 +17,18 @@ As ixoperator, run the following script:
 
 ./run_fsoapi.sh
 
+
+
+Deploying to remote machine
+---------------------------
+For automated deployment, use the deploy_fsoapi.sh script from
+the source directory.  This automatically copies the scripts
+and supporting files to the remote FSO server and runs the
+listener as ixoperator.  This works best if the following
+criteria are met:
+
+    - key-based authentication to FSO server (as ixoperator)
+    - hermod.py dependencies are already met on the FSO server
+
+Usage:
+    ./deploy_fsoapi.sh <hostname or ip address of FSO server>
