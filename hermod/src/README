@@ -1,0 +1,19 @@
+Hermod
+======
+
+This script listens for FSO API HTTP requests then forwards
+them on to elastic search.
+
+PREREQUISITES
+    - requires python demjson module
+
+CONFIGURATION
+Edit hermod.py and change IPADDRESS and PORT to match your
+server requirements.
+
+RUNNING
+Make sure both run_fsoapi.sh and hermod.py are executable.
+As ixoperator, run the following script:
+
+./run_fsoapi.sh
+
