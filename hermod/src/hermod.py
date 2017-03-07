@@ -62,12 +62,15 @@ def catch_all(path):
 
     if s and not request.args:
         id = s.group(1)
+        app.logger.info("Found id: {}".format(id))
 
     # Get status of existing request
     if id:
         try:
+            app.logger.info("Getting info on id: {}".format(id))
             es_response = es.get(index=ES_INDEX, doc_type=ES_TYPE, id=id)
             response = demjson.encode(es_response)
+            app.logger.info("Received response from ES: {}".format(response))
         except Exception as e:
             app.logger.error("Error getting elastic search document: {}".format(e))
 
@@ -77,12 +80,15 @@ def catch_all(path):
         doc[u'request'] = {}
 
         if request.args:
+            app.logger.info("Found query string parameters in request")
             for key in request.args:
                 value = request.args.get(key)
                 doc[u'request'][key] = value
 
             try:
+                app.logger.info("Saving document to elasticsearch: {}".format(demjson.encode(doc)))
                 es_response = es.index(index=ES_INDEX, doc_type=ES_TYPE, body=demjson.encode(doc))
+                app.logger.info("Received response from ES: {}".format(str(es_response)))
             except Exception as e:
                 app.logger.error("Error saving elastic search document: {}".format(e))
 
@@ -96,7 +102,7 @@ if __name__ == "__main__":
     # Init elasticsearch
     es = Elasticsearch()
 
-    logHandler = RotatingFileHandler('hermod.log', maxBytes=10000, backupCount=1)
+    logHandler = RotatingFileHandler('hermod.log', maxBytes=5000, backupCount=2)
     fmt = logging.Formatter('%(asctime)s [%(name)s] [%(levelname)s] : %(message)s')
     logHandler.setFormatter(fmt)
 
