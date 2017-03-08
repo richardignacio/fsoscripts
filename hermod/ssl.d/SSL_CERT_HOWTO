@@ -2,6 +2,8 @@ In order to use SSL, do the following steps:
 
     1. Generate a key and certificate (see procedure below)
     2. Set USE_SSL in hermod.py to True
+    3. Make sure the .key and .crt are located in ../ssh.d relative
+       to where the hermod.py directory is
 
 
 Procedure to generate key and certificate
