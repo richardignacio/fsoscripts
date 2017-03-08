@@ -14,6 +14,7 @@ import re
 import demjson
 from elasticsearch import Elasticsearch
 from flask import Flask, request, send_from_directory
+from OpenSSL import SSL
 
 __author__ = "Richard Ignacio"
 __copyright__ = "Copyright 2007, FireEye Inc."
@@ -24,6 +25,9 @@ __status__ = "Development"
 
 # Init flask app
 app = Flask(__name__)
+
+# Use SSL or not
+USE_SSL = False
 
 # Log file configuration
 LOG_FILE = 'hermod.log'
@@ -86,6 +90,7 @@ def catch_all(path):
                 value = request.args.get(key)
                 doc[u'request'][key] = value
 
+            es_response = {}
             try:
                 app.logger.info("Saving document to elasticsearch: {}".format(demjson.encode(doc)))
                 es_response = es.index(index=ES_INDEX, doc_type=ES_TYPE, body=demjson.encode(doc))
@@ -116,4 +121,11 @@ if __name__ == "__main__":
     app.logger.addHandler(logHandler)
     app.logger.info("===== Log start of hermod.py version: {} =====".format(__version__))
 
-app.run(host=IPADDRESS, port=PORT)
+if USE_SSL:
+    context = SSL.Context(SSL.TLSv1_2_METHOD)
+    cer = os.path.join(os.path.dirname(__file__), '../ssl.d/server.crt')
+    key = os.path.join(os.path.dirname(__file__), '../ssl.d/server.key')
+    context = (cer, key)
+    app.run(host=IPADDRESS, port=PORT, debug=True, ssl_context=context)
+else:
+    app.run(host=IPADDRESS, port=PORT)
