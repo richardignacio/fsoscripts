@@ -5,7 +5,7 @@ This script listens for FSO API HTTP requests then forwards
 them on to elastic search.
 
 PREREQUISITES
-    - requires python demjson module
+    - requires python demjson and flask module
 
 CONFIGURATION
 *Edit* hermod.py and change IPADDRESS and PORT to match your

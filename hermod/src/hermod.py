@@ -18,7 +18,7 @@ from OpenSSL import SSL
 
 __author__ = "Richard Ignacio"
 __copyright__ = "Copyright 2007, FireEye Inc."
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 __maintainer__ = "Richard Ignacio"
 __email__ = "richard.ignacio@mandiant.com"
 __status__ = "Development"
@@ -35,9 +35,10 @@ LOG_FILE = 'hermod.log'
 # Elasticsearch configuration
 ES_INDEX = 'fsoapi'
 ES_TYPE = 'request'
+ES_PORT = 9220
 
 IPADDRESS='localhost'
-PORT='5050'
+PORT=5050
 
 @app.route('/favicon.ico')
 def favicon():
@@ -84,10 +85,15 @@ def catch_all(path):
         doc[u'uri'] = request.path
         doc[u'request'] = {}
 
+
+
         if request.args:
             app.logger.info("Found query string parameters in request")
+            useHTML = False
             for key in request.args:
                 value = request.args.get(key)
+                if key == 'response_type' and value == 'html':
+                    useHTML = True
                 doc[u'request'][key] = value
 
             es_response = {}
@@ -98,7 +104,13 @@ def catch_all(path):
             except Exception as e:
                 app.logger.error("Error saving elastic search document: {}".format(e))
 
-            response = str(demjson.encode(es_response))
+            if useHTML:
+                response = '<html><body><br><br><h3><center>Request Submitted</center></h3>' \
+                           '<br><center>(ID# {})</center><br>' \
+                           '<br><br><center><A HREF="#" onClick="history.back();return false;">Go back</A>' \
+                           '</center></body></html>'.format(es_response['_id'])
+            else:
+                response = str(demjson.encode(es_response))
 
     return response
 
@@ -106,7 +118,7 @@ def catch_all(path):
 if __name__ == "__main__":
 
     # Init elasticsearch
-    es = Elasticsearch()
+    es = Elasticsearch(port=ES_PORT)
 
     logHandler = RotatingFileHandler('hermod.log', maxBytes=5000, backupCount=2)
     fmt = logging.Formatter('%(asctime)s [%(name)s] [%(levelname)s] : %(message)s')
